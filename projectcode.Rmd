@@ -16,6 +16,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(ggplot2)
 library(gridExtra)
 library(dplyr)
+library(ggcorrplot)
 
 df <- read.csv("network_traffic.csv")
 
@@ -48,7 +49,7 @@ grid.arrange(p14, p15, p16, p17, p18, p19, p20, p21, p22, p23, ncol=3)
 
 ```{r}
 # drop useless columns
-df <- select(df, -c(num_outbound_cmds, land, num_failed_logins, wrong_fragment, urgent, num_outbound_cmds, is_host_login, su_attempted))
+df <- select(df, -c(num_outbound_cmds, land, num_failed_logins, wrong_fragment, urgent, is_host_login, su_attempted))
 
 # Clean is_intrusion column
 df$is_intrusion <- ifelse(df$is_intrusion == 1, 1, 0)
@@ -63,4 +64,40 @@ df$root_shell <- as.factor(df$root_shell)
 df$is_guest_login <- as.factor(df$is_guest_login)
 
 summary(df)
+```
+```{r}
+# Prepare data for modeling
+
+# upsample
+df.more.idx <- sample(which(df$is_intrusion == "yes"), 2700, replace = TRUE)
+df.upsample <- rbind(df, df[df.more.idx, ])
+
+# train/test split
+test.indexes <- sample(1:nrow(df), round(0.2 * nrow(df)))
+train.indexes <- setdiff(1:nrow(df), test.indexes)
+df.train <- df[train.indexes,]
+df.test <- df[test.indexes,]
+```
+
+```{r}
+# Logistic Regression
+
+# fit logistic regression on train set
+glm.fits <- glm(is_intrusion∼., data=df.train ,family=binomial)
+summary(glm.fits)
+
+# predict on test set
+glm.probs <- predict(glm.fits,df.test , type="response")
+
+cutoff <- 0.5
+glm.pred <- 1:length(glm.probs)
+glm.pred[glm.probs > cutoff] <- 1
+glm.pred[glm.probs < cutoff] <- 0
+
+table(glm.pred, df.test$is_intrusion)
+```
+
+```{r}
+#KNN
+
 ```
