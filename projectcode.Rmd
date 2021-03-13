@@ -1,0 +1,21 @@
+---
+title: "Group-L-Project"
+author: "Laknath Dias Gunathilake"
+date: "March 13, 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data Exploration  
+
+
+```{r }
+
+df <- read.csv("network_traffic.csv")
+```
+
+
+
