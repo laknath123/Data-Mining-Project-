@@ -13,9 +13,54 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 ```{r }
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
 
 df <- read.csv("network_traffic.csv")
+
+p1 <- qplot(df$duration, geom="histogram")
+p2 <- qplot(df$protocol_type, geom="bar")
+p3 <- qplot(df$service, geom="bar")
+p4 <- qplot(df$src_bytes, geom="histogram")
+p5 <- qplot(df$dst_bytes, geom="histogram")
+p6 <- qplot(df$flag, geom="bar")
+p7 <- qplot(df$land, geom="bar")
+p8 <- qplot(df$wrong_fragment, geom="histogram")
+p9 <- qplot(df$urgent, geom="histogram")
+p10 <- qplot(df$hot, geom="histogram")
+p11 <- qplot(df$num_failed_logins, geom="histogram")
+p12 <- qplot(df$logged_in, geom="bar")
+p13 <- qplot(df$num_compromised, geom="histogram")
+p14 <- qplot(df$root_shell, geom="bar")
+p15 <- qplot(df$su_attempted, geom="bar")
+p16 <- qplot(df$num_root, geom="histogram")
+p17 <- qplot(df$num_file_creations, geom="histogram")
+p18 <- qplot(df$num_shells, geom="histogram")
+p19 <- qplot(df$num_access_files, geom="histogram")
+p20 <- qplot(df$num_outbound_cmds, geom="histogram")
+p21 <- qplot(df$is_hot_login, geom="bar")
+p22 <- qplot(df$is_guest_login, geom="bar")
+p23 <- qplot(df$is_intrusion, geom="bar")
+grid.arrange(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p12, p13, ncol=3)
+grid.arrange(p14, p15, p16, p17, p18, p19, p20, p21, p22, p23, ncol=3)
 ```
 
+```{r}
+# drop useless columns
+df <- select(df, -c(num_outbound_cmds, land, num_failed_logins, wrong_fragment, urgent, num_outbound_cmds, is_host_login, su_attempted))
 
+# Clean is_intrusion column
+df$is_intrusion <- ifelse(df$is_intrusion == 1, 1, 0)
 
+# convert to factors
+df$is_intrusion <- as.factor(df$is_intrusion)
+df$protocol_type <- as.factor(df$protocol_type)
+df$service <- as.factor(df$service)
+df$flag <- as.factor(df$flag)
+df$logged_in <- as.factor(df$logged_in)
+df$root_shell <- as.factor(df$root_shell)
+df$is_guest_login <- as.factor(df$is_guest_login)
+
+summary(df)
+```
