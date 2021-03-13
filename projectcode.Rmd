@@ -13,9 +13,14 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 ```{r }
+library(rpart) # added tree library
+library(partykit)
 library(ggplot2)
 library(gridExtra)
 library(dplyr)
+library(ggcorrplot)
+library(randomForest)
+
 library(ggcorrplot)
 
 df <- read.csv("network_traffic.csv")
@@ -65,6 +70,162 @@ df$is_guest_login <- as.factor(df$is_guest_login)
 
 summary(df)
 ```
+
+# Class Metrics
+```{r}
+classMetrics <- function(score, y, cutoff, 
+                         type = c("all", "accuracy", "sensitivity", 
+                                  "specificity", "ppv", "npv", "precision", 
+                                  "recall")) {
+  
+              
+  # classify the observations based on score and cutoff
+  observed <- y
+  predicted <- ifelse(score >= cutoff,1,0)
+  
+      # Form confusion matrix
+  conf<-table(predicted,observed)
+  
+  # Use the appropriate entries in the confusion matrix to calculate all metrics:
+  # accuracy, sensitivity, specificity, ppv, npv, precision (which is the same as ppv), recall (which is the same as sensitivity)
+  #accuracy <-
+  
+  accuracy<- round((conf[4]+conf[1])/sum(conf),6)
+  sensitivity <- (conf[4])/(conf[3]+conf[4])
+  specificity <-  conf[1]/(conf[1]+conf[2])
+  ppv         <- conf[4]/(conf[4]+conf[2])
+  npv         <- conf[1]/(conf[1]+conf[3])
+  precision   <- ppv
+  recall      <- sensitivity
+  
+  # I'm giving you the exact names you should use in your output dataframe  
+  metric.names <- c("accuracy", "sensitivity", "specificity", 
+                    "ppv", "npv", "precision", "recall")
+
+  # Form into data frame
+  value <- c(accuracy, sensitivity, specificity, 
+                    ppv, npv, precision, recall)
+  
+  
+  
+  # Your data frame should contain ONLY ONE COLUMN named "value"
+  # assign the metric.names above as the rownames of your data frame (just as the rownames, not as a second column!)
+  df <- data.frame(row.names = metric.names,value)
+  
+  full_list<- list(conf,df)
+  names(full_list) <- c("conf.mat", "perf")
+  #full_list <<- full_list
+  # Return a list containing the confusion matrix and the data frame of the metrics
+  # If "all", return all metrics. Otherwise, return just the requested subset of metrics
+  if ("all" %in% type){
+    return(full_list)
+  } else {
+    full_list[[2]]<- full_list[[2]]%>%
+          filter(row.names(full_list[[2]]) %in% type)
+    return(full_list)
+  }
+}
+
+```
+
+
+
+
+
+
+
+Decision Trees, upsampling and creating train and test set
+```{r}
+
+
+# Upsample the data to artifically overcome sample imbalance
+df.more.idx <- sample(which(df$is_intrusion == 1), 15000, replace = TRUE)
+df.upsample <- rbind(df,
+                        df[df.more.idx, ])
+
+
+
+# Randomly select 20% of the data to be held out for model validation
+test.indexes <- sample(1:nrow(df.upsample), 
+                       round(0.2 * nrow(df.upsample)))
+train.indexes <- setdiff(1:nrow(df.upsample), test.indexes)
+
+df.train <- df.upsample[train.indexes, c(1:15, 16)]
+df.test <- df.upsample[test.indexes, c(1:15, 16)]
+
+
+
+```
+
+
+# Training the tree
+```{r}
+intrusion.tree<- rpart(is_intrusion ~ ., df.train)
+
+
+plot(intrusion.tree)
+text(intrusion.tree)
+
+intrusion.party <- as.party(intrusion.tree)
+
+plot(intrusion.party)
+```
+
+
+#Testing the Tree
+```{r}
+intrusion.full <- rpart(is_intrusion ~ ., data = df.train, 
+                        control = rpart.control(minsplit=100, cp=0.002))
+
+# Run the `plotcp` command on this tree. Also look at the `cptable` attribute of `marketing.full`
+plotcp(intrusion.full)
+
+intrusion.full$cptable
+
+mycp <- 0.002000000 
+
+intrusion.pruned<- prune(intrusion.full,cp= mycp)
+
+
+print(intrusion.pruned)
+
+```
+
+# Pruned Tree
+```{r}
+df.pruned.party <- as.party(intrusion.pruned)
+plot(df.pruned.party, gp = gpar(fontsize = 7))
+
+```
+
+
+# Using the pruned tree on the test dataset
+```{r}
+
+my_pred<- predict(intrusion.pruned, marketing.test, type="prob")
+classMetrics(my_pred[,1], df.test$is_intrusion,cutoff = 0.25)
+
+```
+
+# Building a Random forest 
+```{r}
+intrusion.rf <- randomForest(is_intrusion ~.,data=df.train, importance=TRUE)
+
+varImpPlot (intrusion.rf)
+```
+
+```{r}
+my_pred_forest<- predict(intrusion.rf,df.test,type="prob")
+
+
+
+classMetrics(my_pred_forest[,1], df.test$is_intrusion,cutoff = 0.3) 
+classMetrics(my_pred_forest[,1], df.test$is_intrusion,cutoff = 0.25) 
+
+
+```
+
+=======
 ```{r}
 # Prepare data for modeling
 
