@@ -219,6 +219,54 @@ table(glm.pred, df.test$is_intrusion)
 ```
 
 ```{r}
-#KNN
+# source: https://towardsdatascience.com/clustering-datasets-having-both-numerical-and-categorical-variables-ed91cdca0677
 
+# Clustering
+intrusion_df <- filter(df, is_intrusion == 1)
+
+# build a df of gower distances
+library(cluster)
+gower_df <- daisy(intrusion_df, metric="gower", type=list(logration=2))
+summary(gower_df)
+
+# calculate silhouette width to determine number of clusters
+silhouette <- c()
+silhouette = c(silhouette, NA)
+
+# calculate distances using medoids instead of centroids
+# this takes a long time to run
+for(i in 2:10){
+  pam_clusters = pam(as.matrix(gower_df),
+                 diss = TRUE,
+                 k = i)
+  silhouette = c(silhouette,pam_clusters$silinfo$avg.width)
+}
+
+library(Rtsne)
+# plot silhouette widths based on number of clusters 
+plot(1:10, silhouette,
+     xlab = "Clusters",
+     ylab = "Silhouette Width")
+lines(1:10, silhouette)
+
+pam <- pam(gower_df, diss = TRUE, k = 6)
+# These are the median values of our clusters
+# They represent the characteristics of each cluster
+intrusion_df[pam$medoids, ]
+
+# plot the data in 2-dimensional space
+tsne_object <- Rtsne(gower_df, is_distance = TRUE)
+tsne_df <- tsne_object$Y %>%
+  data.frame() %>%
+  setNames(c("X", "Y")) %>%
+  mutate(cluster = factor(pam$clustering))
+
+ggplot(aes(x = X, y = Y), data = tsne_df) +
+  geom_point(aes(color = cluster))
 ```
+
+
+
+
+
+
