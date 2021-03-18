@@ -1,12 +1,12 @@
 ---
 title: "Group-L-Project"
-author: "Laknath Dias Gunathilake"
+author: "Laknath Dias Gunathilake, Alexander Talbott, and Meghna Subramanian"
 date: "March 13, 2021"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message=FALSE)
 ```
 
 ## Data Exploration  
