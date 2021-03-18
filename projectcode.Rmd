@@ -11,6 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Data Exploration  
 
+In this section we explore the various connection types and services to determine if we are able to detect any interesting patterns or anomolies with regards to bytes been transferred and the duration of the connections. 
 
 ```{r }
 library(rpart) # added tree library
@@ -48,7 +49,53 @@ p22 <- qplot(df$is_guest_login, geom="bar")
 p23 <- qplot(df$is_intrusion, geom="bar")
 grid.arrange(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p12, p13, ncol=3)
 grid.arrange(p14, p15, p16, p17, p18, p19, p20, p21, p22, p23, ncol=3)
+
+
+#Adding a boxplots src and dst bytes by service
+options(scipen=999)
+ggplot(data = df,aes(x = as.factor(service),y = src_bytes))+
+        geom_boxplot()+
+        coord_flip()+ylab("number of data bytes from source to destination ")+xlab("Service")
+
+ggplot(data = df,aes(x = as.factor(service),y = dst_bytes))+
+          geom_boxplot()+
+          coord_flip()+
+          ylab("number of data bytes from destination to source")+xlab("Service")
+
 ```
+#Univariate Analysis
+
++ Looking at the data above it is evident that a majority of the continous variables are highly skewed with most values centering close to zero and and a few large values that skewing the distributions to the right.
+
++ it also evident that there are a number of variables that contain only zero's 
+
++ accordingly we hope to look at a bivariate analysis between two variables of interest in the next section
+
+
+## Analyzing byte transfers for Different Service Types
+
+We wanted to understand the bytes transferred between the different services `r unique(df$service)`
+
+
++  It is evident that the http ftp_data,http and smtp data have large variation in the number of bytes sent from source to destination with http data having an extreme outlier
+
++ When looking at byte transfer from destination to the source it is evident that http, and telnet have large variations.
+It is evident that "Telnet is not a secure protocol and is unencrypted. By monitoring a user's connection, anyone can access a person's username, password and other private information that is typed over the Telnet session in plaintext. With this information, access can be gained to the user's device." Source("https://searchnetworking.techtarget.com/definition/Telnet")
+According this is quite alarming that we large number of bytes being sent from destination to the source using the telnet service type.
+
+# Understanding Duration for different Service Types
+
+```{r}
+ggplot(data = df,aes(x = as.factor(service),y = duration ))+
+          geom_boxplot()+
+          coord_flip()+xlab("Service Types")
+
+
+```
++ It is evident telnet and service type tagged others have the highest duration or the number of second in the connection. 
+It is also evident that others seem to have multiple outliers including an outlier that incidates there was a connection that 
+lasted for more than `r max(df$duration)/(60*60)` or 6 hours
+
 
 ```{r}
 # drop useless columns
@@ -69,7 +116,7 @@ df$is_guest_login <- as.factor(df$is_guest_login)
 summary(df)
 ```
 
-# Class Metrics
+# Class Metrics Function
 ```{r}
 classMetrics <- function(score, y, cutoff, 
                          type = c("all", "accuracy", "sensitivity", 
