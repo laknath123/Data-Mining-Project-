@@ -26,7 +26,7 @@ df <- read.csv("network_traffic.csv")
 
 cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 
-set.seed(1234)
+#set.seed(1234)
 ```
 
 ## Data Cleaning
@@ -39,11 +39,11 @@ df <- select(df, -c(num_outbound_cmds, land, num_failed_logins, wrong_fragment, 
 df$is_intrusion <- ifelse(df$is_intrusion == 1, 1, 0)
 
 # make Yes/No variables more readable
-df <- df %>%
-  mutate(is_intrusion = ifelse(is_intrusion == 0,"No","Yes")) %>%
-  mutate(logged_in = ifelse(logged_in == 0,"No","Yes")) %>%
-  mutate(root_shell = ifelse(root_shell == 0,"No","Yes")) %>%
-  mutate(is_guest_login = ifelse(is_guest_login == 0,"No","Yes"))
+#df <- df %>%
+#  mutate(is_intrusion = ifelse(is_intrusion == 0,"No","Yes")) %>%
+#  mutate(logged_in = ifelse(logged_in == 0,"No","Yes")) %>%
+#  mutate(root_shell = ifelse(root_shell == 0,"No","Yes")) %>%
+#  mutate(is_guest_login = ifelse(is_guest_login == 0,"No","Yes"))
 
 # convert to factors
 df$is_intrusion <- as.factor(df$is_intrusion)
@@ -271,7 +271,7 @@ df<- df%>%select(-c(7:14))%>%select(-c(1,7))
 
 
 # Upsample the data to artifically overcome sample imbalance
-df.more.idx <- sample(which(df$is_intrusion == "Yes"), 900, replace = TRUE)
+df.more.idx <- sample(which(df$is_intrusion == 1), 900, replace = TRUE)
 
 set.seed(981)
 
@@ -355,6 +355,7 @@ my_pred<- predict(intrusion.pruned, df.test, type="prob")[,1]
 
 
 classMetrics(my_pred, df.test$is_intrusion,cutoff = 0.20)
+
 ```
 
 ## Visualizing Sensitivity and Specificity
