@@ -92,9 +92,12 @@ ggplot(data = df,aes(x = as.factor(service),y = duration ))+
 
 
 ```
+
 + It is evident telnet and service type tagged others have the highest duration or the number of second in the connection. 
 It is also evident that others seem to have multiple outliers including an outlier that incidates there was a connection that 
 lasted for more than `r max(df$duration)/(60*60)` or 6 hours
+
+
 
 
 ```{r}
@@ -115,6 +118,9 @@ df$is_guest_login <- as.factor(df$is_guest_login)
 
 summary(df)
 ```
+
+
+
 
 # Class Metrics Function
 ```{r}
@@ -173,21 +179,132 @@ classMetrics <- function(score, y, cutoff,
 
 ```
 
-## Decision Trees, upsampling and creating train and test set
+#Plot Class 
 ```{r}
+plotClassMetrics <- function(score, y, xvar = NULL, yvar = c("accuracy", "sensitivity", 
+                                  "specificity", "ppv", "npv", "precision", 
+                                  "recall"),
+                             flip.x = FALSE) {
+  
+  # matches the user-input yvar argument against the list of valid options specified in the function header
+  yvar <- match.arg(yvar)
+  
+  # If there are a lot of (more than 100) unique score values, just calculate the metrics
+  # along an evenly spaced grid of 100 scores.
+  unique.scores <- unique(score)
+  if(length(unique.scores) > 100) {
+    cutoff.seq <- sample(unique.scores, 100, replace = FALSE)
+  } else { # otherwise just use the unique score values to calculate the metrics
+    cutoff.seq <- unique.scores
+  }
+  
+  # number of score values to evaluate the metrics
+  n <- length(cutoff.seq)
+  
+  # initialize the vectors to record the x & y coordinates
+  x.out <- numeric(n)
+  y.out <- numeric(n)
+  # Loop over all values of the score and calculate the performance metrics
+  for(i in 1:n) {
+    if(!is.null(xvar)) { # specified metric as x axis values
+      # call classMetrics to calculate the metrics and record the values
+      metrics <- classMetrics(score, y, cutoff = cutoff.seq[i], type = c(xvar, yvar))
+      x.out[i] <- metrics$perf[xvar, 1]
+      y.out[i] <- metrics$perf[yvar, 1]
+    } else { # score as x axis values
+      # call classMetrics to calculate the metrics and record the values
+      metrics <- classMetrics(score, y, cutoff = cutoff.seq[i], type = c(yvar))
+      x.out[i] <- cutoff.seq[i]
+      y.out[i] <- metrics$perf[yvar, 1]
+    }
+  }
+
+  # flip x values if required
+  if(flip.x) {
+    x.out <- 1 - x.out
+  }
+  
+  # Combine metrics into a data frame
+  df.out <- data.frame(score = cutoff.seq, x = x.out, y = y.out)
+  
+  # Reorder the data frame in increasing order of the x-axis variable
+  df.out <- df.out[order(df.out$score), ]
+  
+  # De-duplicate x-axis
+  df.out <- subset(df.out, subset = !duplicated(df.out$x))
+  
+  # determine the x-axis label
+  if(!is.null(xvar)) {
+    x.text <- ifelse(flip.x, paste0("1 - ", xvar), xvar)
+  } else {
+    x.text <- "score"
+  }
+  
+  # Construct line plot
+  print(qplot(data = df.out, x = x, y = y, geom = "line",
+              xlab = ifelse(is.null(xvar), "score", x.text),
+              ylab = yvar, ylim = c(0, 1)))
+}
+```
+
+
+# Identifying the imbalances in dataset
+
+```{r}
+ggplot(data = df,aes(x = is_intrusion))+
+      geom_bar(aes(fill=is_intrusion))+ ggtitle("Class Imbalance")
+
+```
+##Oversampling (Upsampling) the minority class
+
++ It is evident from the above graph that we have a problem of imbalanced classes- Meaning we have far fewer postive classes
+or actual intrusions compared to benign intrusions.
+
++ Since we cannot collect aditional data in this instance, such a situattion requires us to balance the classes by introducing
+resampling to the dataset. 
+
++ Since the minority class is underpresented, we decided to oversample the `r is_intrusion==1` observations
+
+
+
+```{r}
+df<- df%>%select(-c(7:14))%>%select(-c(1,7))
+
+
 # Upsample the data to artifically overcome sample imbalance
-df.more.idx <- sample(which(df$is_intrusion == 1), 15000, replace = TRUE)
+df.more.idx <- sample(which(df$is_intrusion == 1), 900, replace = TRUE)
+
+set.seed(981)
+
+
 df.upsample <- rbind(df,
                         df[df.more.idx, ])
 
+
+ggplot(data = df.upsample,aes(x = is_intrusion))+
+      geom_bar(aes(fill=is_intrusion))+ ggtitle("Classes Balanced")
+
+```
++ The above bar graph seems to indicate now that we have an approximate balance between intrusions equal to one and zero
+
+
+```{r}
 # Randomly select 20% of the data to be held out for model validation
 test.indexes <- sample(1:nrow(df.upsample), 
                        round(0.2 * nrow(df.upsample)))
+
+
 train.indexes <- setdiff(1:nrow(df.upsample), test.indexes)
+
+
 
 df.train <- df.upsample[train.indexes,]
 df.test <- df.upsample[test.indexes,]
+
+
 ```
+
+
 
 ### Training the tree
 ```{r}
@@ -197,29 +314,35 @@ intrusion.tree <- rpart(is_intrusion ~ ., df.train)
 plot(intrusion.tree)
 text(intrusion.tree)
 
+
 intrusion.party <- as.party(intrusion.tree)
 
 plot(intrusion.party)
+
+print(intrusion.party)
+
 ```
 
 
-### Testing the Tree
+### Growing and Pruning the Tree
 ```{r}
 intrusion.full <- rpart(is_intrusion ~ ., data = df.train, 
-                        control = rpart.control(minsplit=100, cp=0.002))
+                        control = rpart.control(minsplit=10, cp=0.002))
 
 # Run the `plotcp` command on this tree. Also look at the `cptable` attribute of `marketing.full`
 plotcp(intrusion.full)
 
 intrusion.full$cptable
 
-mycp <- 0.002000000 
+mycp <- 0.046
 
 intrusion.pruned<- prune(intrusion.full,cp= mycp)
 
 
 print(intrusion.pruned)
 ```
++ After trying different min split levels for training the dataset I found minsplit level of 10 to result in better performance when training the tree.
+
 
 ### Pruned Tree
 ```{r}
@@ -227,24 +350,56 @@ df.pruned.party <- as.party(intrusion.pruned)
 plot(df.pruned.party, gp = gpar(fontsize = 7))
 ```
 
++ it is evident that in the pruned tree we split by service and flag to classify observations as intrusions or not.  
+
 ### Using the pruned tree on the test dataset
 ```{r}
-my_pred<- predict(intrusion.pruned, df.test, type="prob")
-classMetrics(my_pred[,1], df.test$is_intrusion,cutoff = 0.25)
+my_pred<- predict(intrusion.pruned, df.test, type="prob")[,1]
+
+
+classMetrics(my_pred, df.test$is_intrusion,cutoff = 0.20)
 ```
+
+## Visualizing Sensitivity and Specificity
+
+```{r}
+plotClassMetrics(my_pred, df.test$is_intrusion, 
+                 xvar = "accuracy", yvar = "specificity", 
+                 flip.x = TRUE)
+```
+
+
+
++ it is evident that our tree model has a sensitivity of 0.66. Sensitivity or recall is when given the observations that had the event (intrusions), the observations that were correctly classified to have the event.
+
++ We also know that a classifier with high Sensitivity is desirable when False Negatives (e.g., failing to detect an intrusion ) are more costly than False Positives(flagging a case an attemt that turns out to non intrusive)
+
 
 ## Building a Random forest 
-```{r}
-intrusion.rf <- randomForest(is_intrusion ~.,data=df.train, importance=TRUE)
 
-varImpPlot (intrusion.rf)
+Since Decision trees provided a high degree of recall, we also wanted look at random forests
+
+```{r}
+intrusion.rf <- randomForest(is_intrusion ~.,data=df.train)
+intrusion.rf
+
+
 ```
 
-```{r}
-my_pred_forest<- predict(intrusion.rf,df.test,type="prob")
++ Based on the importance plot, we know that service, flag, src_bytes, dst_bytes and protocol type are important 
 
-classMetrics(my_pred_forest[,1], df.test$is_intrusion,cutoff = 0.3) 
-classMetrics(my_pred_forest[,1], df.test$is_intrusion,cutoff = 0.25) 
+```{r}
+varImpPlot (intrusion.rf)
+
+```
+
+
+
+```{r}
+rf.test.prob <- predict(intrusion.rf, newdata = df.test, type = "prob")[,1]
+
+classMetrics(rf.test.prob, df.test$is_intrusion, cutoff = 0.3)
+
 ```
 
 ```{r}
@@ -311,6 +466,8 @@ tsne_df <- tsne_object$Y %>%
 ggplot(aes(x = X, y = Y), data = tsne_df) +
   geom_point(aes(color = cluster))
 ```
+
+
 
 
 
