@@ -20,6 +20,7 @@ library(randomForest)
 library(cluster)
 library(caret)
 library(leaps)
+library(Rtsne)
 
 df <- read.csv("network_traffic.csv")
 
@@ -52,22 +53,6 @@ df$flag <- as.factor(df$flag)
 df$logged_in <- as.factor(df$logged_in)
 df$root_shell <- as.factor(df$root_shell)
 df$is_guest_login <- as.factor(df$is_guest_login)
-```
-
-We will split our data into two sets, train and test, for use in the models we will be building in later sections.
-```{r}
-# Upsample the data to artifically overcome sample imbalance
-df.more.idx <- sample(which(df$is_intrusion == "Yes"), 15000, replace = TRUE)
-df.upsample <- rbind(df,
-                        df[df.more.idx, ])
-
-# Randomly select 20% of the data to be held out for model validation
-test.indexes <- sample(1:nrow(df.upsample), 
-                       round(0.2 * nrow(df.upsample)))
-train.indexes <- setdiff(1:nrow(df.upsample), test.indexes)
-
-df.train <- df.upsample[train.indexes,]
-df.test <- df.upsample[test.indexes,]
 ```
 
 ## Data Exploration  
@@ -131,41 +116,13 @@ According this is quite alarming that we large number of bytes being sent from d
 ggplot(data = df,aes(x = as.factor(service),y = duration ))+
           geom_boxplot()+
           coord_flip()+xlab("Service Types")
-
-
 ```
 
 + It is evident telnet and service type tagged others have the highest duration or the number of second in the connection. 
 It is also evident that others seem to have multiple outliers including an outlier that incidates there was a connection that 
 lasted for more than `r max(df$duration)/(60*60)` or 6 hours
 
-<<<<<<< HEAD
 
-
-
-```{r}
-# drop useless columns
-df <- select(df, -c(num_outbound_cmds, land, num_failed_logins, wrong_fragment, urgent, is_host_login, su_attempted))
-
-# Clean is_intrusion column
-df$is_intrusion <- ifelse(df$is_intrusion == 1, 1, 0)
-
-# convert to factors
-df$is_intrusion <- as.factor(df$is_intrusion)
-df$protocol_type <- as.factor(df$protocol_type)
-df$service <- as.factor(df$service)
-df$flag <- as.factor(df$flag)
-df$logged_in <- as.factor(df$logged_in)
-df$root_shell <- as.factor(df$root_shell)
-df$is_guest_login <- as.factor(df$is_guest_login)
-
-summary(df)
-```
-
-
-
-
-=======
 # Class Metrics Function
 ```{r}
 classMetrics <- function(score, y, cutoff, 
@@ -294,30 +251,27 @@ plotClassMetrics <- function(score, y, xvar = NULL, yvar = c("accuracy", "sensit
 
 
 # Identifying the imbalances in dataset
-
 ```{r}
 ggplot(data = df,aes(x = is_intrusion))+
       geom_bar(aes(fill=is_intrusion))+ ggtitle("Class Imbalance")
 
 ```
-##Oversampling (Upsampling) the minority class
 
+##Oversampling (Upsampling) the minority class
 + It is evident from the above graph that we have a problem of imbalanced classes- Meaning we have far fewer postive classes
 or actual intrusions compared to benign intrusions.
 
 + Since we cannot collect aditional data in this instance, such a situattion requires us to balance the classes by introducing
 resampling to the dataset. 
 
-+ Since the minority class is underpresented, we decided to oversample the `r is_intrusion==1` observations
-
-
++ Since the minority class is underpresented, we decided to oversample the `r is_intrusion=="Yes"` observations
 
 ```{r}
 df<- df%>%select(-c(7:14))%>%select(-c(1,7))
 
 
 # Upsample the data to artifically overcome sample imbalance
-df.more.idx <- sample(which(df$is_intrusion == 1), 900, replace = TRUE)
+df.more.idx <- sample(which(df$is_intrusion == "Yes"), 900, replace = TRUE)
 
 set.seed(981)
 
@@ -331,7 +285,6 @@ ggplot(data = df.upsample,aes(x = is_intrusion))+
 
 ```
 + The above bar graph seems to indicate now that we have an approximate balance between intrusions equal to one and zero
-
 
 ```{r}
 # Randomly select 20% of the data to be held out for model validation
@@ -348,11 +301,8 @@ df.test <- df.upsample[test.indexes,]
 
 
 ```
-=======
+
 ## Decision Trees
-
-
-
 ### Training the tree
 ```{r}
 intrusion.tree <- rpart(is_intrusion ~ ., df.train)
@@ -408,16 +358,11 @@ classMetrics(my_pred, df.test$is_intrusion,cutoff = 0.20)
 ```
 
 ## Visualizing Sensitivity and Specificity
-
 ```{r}
 plotClassMetrics(my_pred, df.test$is_intrusion, 
                  xvar = "accuracy", yvar = "specificity", 
                  flip.x = TRUE)
 ```
-
-
-
-
 + it is evident that our tree model has a sensitivity of 0.66. Sensitivity or recall is when given the observations that had the event (intrusions), the observations that were correctly classified to have the event.
 
 + We also know that a classifier with high Sensitivity is desirable when False Negatives (e.g., failing to detect an intrusion ) are more costly than False Positives(flagging a case an attemt that turns out to non intrusive)
@@ -427,31 +372,22 @@ plotClassMetrics(my_pred, df.test$is_intrusion,
 
 Since Decision trees provided a high degree of recall, we also wanted look at random forests
 
-=======
 ### Building a Random forest 
 ```{r}
 intrusion.rf <- randomForest(is_intrusion ~.,data=df.train)
 intrusion.rf
-
-
-
 ```
 
 + Based on the importance plot, we know that service, flag, src_bytes, dst_bytes and protocol type are important 
 
 ```{r}
 varImpPlot (intrusion.rf)
-
-
 ```
-
-
 
 ```{r}
 rf.test.prob <- predict(intrusion.rf, newdata = df.test, type = "prob")[,1]
 
 classMetrics(rf.test.prob, df.test$is_intrusion, cutoff = 0.3)
-
 ```
 
 
@@ -524,7 +460,7 @@ plot_AIC<-ggplot(data = data.frame(df.summary$cp),
 
 grid.arrange(plot_RSS, plot_R_sq,plot_AIC,plot_BIC, ncol=2,nrow=2)
 ```
-Here we see the RSS, R2, AIC, and BIC of all of the above models. We can see that errors are minimized and R2 is maximized at about 12 variables included with severely diminishing returns after that amount. Therefore, we will select the subset with 12 variables to put into the logistic regression model.
+Here we see the RSS, R2, AIC, and BIC of all of the above models. We can see that errors are minimized and R2 is maximized at about 6 variables included with severely diminishing returns after that amount. Therefore, we will select the subset with 6 variables to put into the logistic regression model.
 
 ```{r}
 # fit logistic regression on train set
@@ -567,7 +503,6 @@ for(i in 2:10){
   silhouette = c(silhouette,pam_clusters$silinfo$avg.width)
 }
 
-library(Rtsne)
 # plot silhouette widths based on number of clusters 
 plot(1:10, silhouette,
      xlab = "Clusters",
@@ -589,11 +524,3 @@ tsne_df <- tsne_object$Y %>%
 ggplot(aes(x = X, y = Y), data = tsne_df) +
   geom_point(aes(color = cluster))
 ```
-
-
-
-
-
-
-
-
