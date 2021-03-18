@@ -4,16 +4,12 @@ author: "Laknath Dias Gunathilake, Alexander Talbott, and Meghna Subramanian"
 date: "March 13, 2021"
 output: html_document
 ---
+This is the group project for Group L in 95-791 Data Mining at Carnegie Mellon University, Heinz College, Spring 2021. The project entails an analysis of the network infrastructure of XYZ Bank in St. Loius, Missouri. The team at the bank recently discovered many instances of network intrusions and labeled them in a data set with other information. This project attempts to build a data mining approach to identifying such network intrusions in the future.
 
+In this file, you will find the approach we took to cleaning the data, building classification models to detect likely intrusions, and building clustering models to categorize the types of intrusions and identify new intrusions in the future. 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message=FALSE)
-```
 
-## Data Exploration  
-
-In this section we explore the various connection types and services to determine if we are able to detect any interesting patterns or anomolies with regards to bytes been transferred and the duration of the connections. 
-
-```{r }
 library(rpart) # added tree library
 library(partykit)
 library(ggplot2)
@@ -21,35 +17,82 @@ library(gridExtra)
 library(dplyr)
 library(ggcorrplot)
 library(randomForest)
+library(cluster)
+library(caret)
+library(leaps)
 
 df <- read.csv("network_traffic.csv")
 
-p1 <- qplot(df$duration, geom="histogram")
-p2 <- qplot(df$protocol_type, geom="bar")
-p3 <- qplot(df$service, geom="bar")
-p4 <- qplot(df$src_bytes, geom="histogram")
-p5 <- qplot(df$dst_bytes, geom="histogram")
-p6 <- qplot(df$flag, geom="bar")
-p7 <- qplot(df$land, geom="bar")
-p8 <- qplot(df$wrong_fragment, geom="histogram")
-p9 <- qplot(df$urgent, geom="histogram")
-p10 <- qplot(df$hot, geom="histogram")
-p11 <- qplot(df$num_failed_logins, geom="histogram")
-p12 <- qplot(df$logged_in, geom="bar")
-p13 <- qplot(df$num_compromised, geom="histogram")
-p14 <- qplot(df$root_shell, geom="bar")
-p15 <- qplot(df$su_attempted, geom="bar")
-p16 <- qplot(df$num_root, geom="histogram")
-p17 <- qplot(df$num_file_creations, geom="histogram")
-p18 <- qplot(df$num_shells, geom="histogram")
-p19 <- qplot(df$num_access_files, geom="histogram")
-p20 <- qplot(df$num_outbound_cmds, geom="histogram")
-p21 <- qplot(df$is_hot_login, geom="bar")
-p22 <- qplot(df$is_guest_login, geom="bar")
-p23 <- qplot(df$is_intrusion, geom="bar")
-grid.arrange(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p12, p13, ncol=3)
-grid.arrange(p14, p15, p16, p17, p18, p19, p20, p21, p22, p23, ncol=3)
+cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 
+set.seed(1234)
+```
+
+## Data Cleaning
+Unfortunately, the data provided by the bank is not perfect. Here, we drop the columns that will not be useful in our analysis as they contain the same value for every instance and we convert the data to datatypes R can better understand.
+```{r}
+# drop useless columns
+df <- select(df, -c(num_outbound_cmds, land, num_failed_logins, wrong_fragment, urgent, is_host_login, su_attempted))
+
+# Clean is_intrusion column
+df$is_intrusion <- ifelse(df$is_intrusion == 1, 1, 0)
+
+# make Yes/No variables more readable
+df <- df %>%
+  mutate(is_intrusion = ifelse(is_intrusion == 0,"No","Yes")) %>%
+  mutate(logged_in = ifelse(logged_in == 0,"No","Yes")) %>%
+  mutate(root_shell = ifelse(root_shell == 0,"No","Yes")) %>%
+  mutate(is_guest_login = ifelse(is_guest_login == 0,"No","Yes"))
+
+# convert to factors
+df$is_intrusion <- as.factor(df$is_intrusion)
+df$protocol_type <- as.factor(df$protocol_type)
+df$service <- as.factor(df$service)
+df$flag <- as.factor(df$flag)
+df$logged_in <- as.factor(df$logged_in)
+df$root_shell <- as.factor(df$root_shell)
+df$is_guest_login <- as.factor(df$is_guest_login)
+```
+
+We will split our data into two sets, train and test, for use in the models we will be building in later sections.
+```{r}
+# Upsample the data to artifically overcome sample imbalance
+df.more.idx <- sample(which(df$is_intrusion == "Yes"), 15000, replace = TRUE)
+df.upsample <- rbind(df,
+                        df[df.more.idx, ])
+
+# Randomly select 20% of the data to be held out for model validation
+test.indexes <- sample(1:nrow(df.upsample), 
+                       round(0.2 * nrow(df.upsample)))
+train.indexes <- setdiff(1:nrow(df.upsample), test.indexes)
+
+df.train <- df.upsample[train.indexes,]
+df.test <- df.upsample[test.indexes,]
+```
+
+## Data Exploration  
+
+In this section, we explore the various connection types and services to determine if we are able to detect any interesting patterns or anomolies with regards to bytes been transferred and the duration of the connections. 
+
+```{r }
+p1 <- qplot(df$duration, geom="histogram", xlab="Duration")
+p2 <- qplot(df$protocol_type, geom="bar", xlab="Protocol Type")
+p3 <- qplot(df$service, geom="bar", xlab="Service")
+p4 <- qplot(df$src_bytes, geom="histogram", xlab="Bytes from Source to Destination")
+p5 <- qplot(df$dst_bytes, geom="histogram", xlab="Bytes from Destination to Source")
+p6 <- qplot(df$flag, geom="bar", xlab="Error Status")
+p7 <- qplot(df$hot, geom="histogram", xlab="Hot Indicators")
+p8 <- qplot(df$logged_in, geom="bar", xlab="Logged In")
+p9 <- qplot(df$num_compromised, geom="histogram", xlab="Number Compromised")
+p10 <- qplot(df$root_shell, geom="bar", xlab="Root Shell")
+p11 <- qplot(df$num_root, geom="histogram", xlab="Number of Root Commands")
+p12 <- qplot(df$num_file_creations, geom="histogram", xlab="File Creations")
+p13 <- qplot(df$num_shells, geom="histogram", xlab="Number of Shells")
+p14 <- qplot(df$num_access_files, geom="histogram", xlab="Accessed Files")
+p15 <- qplot(df$is_guest_login, geom="bar", xlab="Guest Login")
+p16 <- qplot(df$is_intrusion, geom="bar", xlab="Intrusion")
+grid.arrange(p1, p2, p3, p4, p5, p6, p7, p8, p9, ncol=3)
+grid.arrange(p10, p12, p13, p14, p15, p16, ncol=3)
 
 #Adding a boxplots src and dst bytes by service
 options(scipen=999)
@@ -61,9 +104,8 @@ ggplot(data = df,aes(x = as.factor(service),y = dst_bytes))+
           geom_boxplot()+
           coord_flip()+
           ylab("number of data bytes from destination to source")+xlab("Service")
-
 ```
-#Univariate Analysis
+## Univariate Analysis
 
 + Looking at the data above it is evident that a majority of the continous variables are highly skewed with most values centering close to zero and and a few large values that skewing the distributions to the right.
 
@@ -95,26 +137,6 @@ ggplot(data = df,aes(x = as.factor(service),y = duration ))+
 + It is evident telnet and service type tagged others have the highest duration or the number of second in the connection. 
 It is also evident that others seem to have multiple outliers including an outlier that incidates there was a connection that 
 lasted for more than `r max(df$duration)/(60*60)` or 6 hours
-
-
-```{r}
-# drop useless columns
-df <- select(df, -c(num_outbound_cmds, land, num_failed_logins, wrong_fragment, urgent, is_host_login, su_attempted))
-
-# Clean is_intrusion column
-df$is_intrusion <- ifelse(df$is_intrusion == 1, 1, 0)
-
-# convert to factors
-df$is_intrusion <- as.factor(df$is_intrusion)
-df$protocol_type <- as.factor(df$protocol_type)
-df$service <- as.factor(df$service)
-df$flag <- as.factor(df$flag)
-df$logged_in <- as.factor(df$logged_in)
-df$root_shell <- as.factor(df$root_shell)
-df$is_guest_login <- as.factor(df$is_guest_login)
-
-summary(df)
-```
 
 # Class Metrics Function
 ```{r}
@@ -173,21 +195,7 @@ classMetrics <- function(score, y, cutoff,
 
 ```
 
-## Decision Trees, upsampling and creating train and test set
-```{r}
-# Upsample the data to artifically overcome sample imbalance
-df.more.idx <- sample(which(df$is_intrusion == 1), 15000, replace = TRUE)
-df.upsample <- rbind(df,
-                        df[df.more.idx, ])
-
-# Randomly select 20% of the data to be held out for model validation
-test.indexes <- sample(1:nrow(df.upsample), 
-                       round(0.2 * nrow(df.upsample)))
-train.indexes <- setdiff(1:nrow(df.upsample), test.indexes)
-
-df.train <- df.upsample[train.indexes,]
-df.test <- df.upsample[test.indexes,]
-```
+## Decision Trees
 
 ### Training the tree
 ```{r}
@@ -233,11 +241,11 @@ my_pred<- predict(intrusion.pruned, df.test, type="prob")
 classMetrics(my_pred[,1], df.test$is_intrusion,cutoff = 0.25)
 ```
 
-## Building a Random forest 
+### Building a Random forest 
 ```{r}
 intrusion.rf <- randomForest(is_intrusion ~.,data=df.train, importance=TRUE)
 
-varImpPlot (intrusion.rf)
+varImpPlot(intrusion.rf)
 ```
 
 ```{r}
@@ -247,11 +255,81 @@ classMetrics(my_pred_forest[,1], df.test$is_intrusion,cutoff = 0.3)
 classMetrics(my_pred_forest[,1], df.test$is_intrusion,cutoff = 0.25) 
 ```
 
-```{r}
-# Logistic Regression
 
+## Logistic Regression
+In this section, we will attempt to separate intrusions from benign sessions using logistic regression. First we will select the subset of variables that will be best to fit the logisitc regression model.
+```{r}
+df.subset <- regsubsets(is_intrusion ~ .,
+                        data = df,
+                        nbest = 1,
+                        nvmax = NULL,
+                        method = "exhaustive", 
+                        really.big = TRUE)
+
+nvmax = length(df) # all variables
+df.subset_bestmodels <- list()
+#Iterate to get the best model at each number of coeficients
+#Remember that we limited our nvmax to 5!
+for(i in 1:nvmax) {
+  df.subset_bestmodels[[i]] <- c(coef(df.subset, i))
+}
+df.subset_bestmodels
+```
+This shows us which variables are included at each step of the best subset selection. We start with a model consisting of one variable then work up to a full model with all 16 predictos included. We will now track the metrics of these models to pick which one is ideal for regression.
+
+```{r}
+df.summary<-summary(df.subset)
+
+num_variables<-seq(1,length(df.summary$rss))
+
+plot_RSS<-ggplot(data = data.frame(df.summary$rss),
+                 aes(x=num_variables,y=df.summary$rss))+
+  geom_line()+
+  geom_point(x=which.min(df.summary$rss),
+             y=min(df.summary$rss),aes(color="red"),
+             show.legend = FALSE)+
+  xlab("# Variables")+
+  ylab("RSS")+
+  theme_bw()
+
+plot_R_sq<-ggplot(data = data.frame(df.summary$rsq),
+                 aes(x=num_variables,y=df.summary.rsq))+
+  geom_line()+
+  geom_point(x=which.max(df.summary$rsq),
+             y=max(df.summary$rsq),aes(color="red"),
+             show.legend = FALSE)+
+  xlab("# Variables")+
+  ylab("R-sq")+
+  theme_bw()
+
+plot_BIC<-ggplot(data = data.frame(df.summary$bic),
+                 aes(x=num_variables,y=df.summary.bic))+
+  geom_line()+
+  geom_point(x=which.min(df.summary$bic),
+             y=min(df.summary$bic),aes(color="red"),
+             show.legend = FALSE)+
+  xlab("# Variables")+
+  ylab("BIC")+
+  theme_bw()
+
+plot_AIC<-ggplot(data = data.frame(df.summary$cp),
+                 aes(x=num_variables,y=df.summary.cp))+
+  geom_line()+
+  geom_point(x=which.min(df.summary$cp),
+             y=min(df.summary$cp),aes(color="red"),
+             show.legend = FALSE)+
+  xlab("# Variables")+
+  ylab("AIC")+
+  theme_bw()
+
+
+grid.arrange(plot_RSS, plot_R_sq,plot_AIC,plot_BIC, ncol=2,nrow=2)
+```
+Here we see the RSS, R2, AIC, and BIC of all of the above models. We can see that errors are minimized and R2 is maximized at about 12 variables included with severely diminishing returns after that amount. Therefore, we will select the subset with 12 variables to put into the logistic regression model.
+
+```{r}
 # fit logistic regression on train set
-glm.fits <- glm(is_intrusion∼., data=df.train ,family=binomial)
+glm.fits <- glm(is_intrusion∼., data=df.train ,family="binomial", maxit=100)
 summary(glm.fits)
 
 # predict on test set
@@ -259,20 +337,21 @@ glm.probs <- predict(glm.fits,df.test, type="response")
 
 cutoff <- 0.5
 glm.pred <- 1:length(glm.probs)
-glm.pred[glm.probs > cutoff] <- 1
-glm.pred[glm.probs < cutoff] <- 0
+glm.pred[glm.probs > cutoff] <- "Yes"
+glm.pred[glm.probs < cutoff] <- "No"
 
 table(glm.pred, df.test$is_intrusion)
+varImp(glm.fits)
 ```
 
+## Clustering
 ```{r}
 # source: https://towardsdatascience.com/clustering-datasets-having-both-numerical-and-categorical-variables-ed91cdca0677
 
 # Clustering
-intrusion_df <- filter(df, is_intrusion == 1)
+intrusion_df <- filter(df, is_intrusion == "Yes")
 
 # build a df of gower distances
-library(cluster)
 gower_df <- daisy(intrusion_df, metric="gower", type=list(logration=2))
 summary(gower_df)
 
