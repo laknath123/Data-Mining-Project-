@@ -39,6 +39,16 @@ df <- select(df, -c(num_outbound_cmds, land, num_failed_logins, wrong_fragment, 
 # Clean is_intrusion column
 df$is_intrusion <- ifelse(df$is_intrusion == 1, 1, 0)
 
+<<<<<<< HEAD
+=======
+# make Yes/No variables more readable
+#df <- df %>%
+#  mutate(is_intrusion = ifelse(is_intrusion == 0,"No","Yes")) %>%
+#  mutate(logged_in = ifelse(logged_in == 0,"No","Yes")) %>%
+#  mutate(root_shell = ifelse(root_shell == 0,"No","Yes")) %>%
+#  mutate(is_guest_login = ifelse(is_guest_login == 0,"No","Yes"))
+
+>>>>>>> d291c47c2eaca7524e7cd8e134654a34ff23f6f4
 # convert to factors
 df$is_intrusion <- as.factor(df$is_intrusion)
 df$protocol_type <- as.factor(df$protocol_type)
@@ -265,9 +275,13 @@ tree.df <- df%>%select(-c(7:14))%>%select(-c(1,7))
 
 
 # Upsample the data to artifically overcome sample imbalance
+<<<<<<< HEAD
+df.more.idx <- sample(which(tree.df$is_intrusion == 1), 900, replace = TRUE)
+=======
 df.more.idx <- sample(which(df$is_intrusion == 1), 900, replace = TRUE)
 
 set.seed(981)
+>>>>>>> d291c47c2eaca7524e7cd8e134654a34ff23f6f4
 
 
 df.upsample <- rbind(tree.df,
