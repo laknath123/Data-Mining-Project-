@@ -1,6 +1,6 @@
 ---
 title: "Group-L-Project"
-author: "Laknath Dias Gunathilake, Alexander Talbott, and Meghna Subramanian"
+author: "Laknath Dias Gunathilake (lgunathi), Alexander Talbott (atalbott), and Meghna Subramaniam (meghnas)"
 date: "March 13, 2021"
 output: html_document
 ---
@@ -61,25 +61,32 @@ df$is_guest_login <- as.factor(df$is_guest_login)
 This section explores the various connection types and services to determine if we can detect any interesting patterns or anomalies regarding bytes and the connection durations. Initially, we did a univariate variable analysis through bar charts and box plots. We then moved on to do a multivariate analysis to understand relationships between different variables. Findings from our study are explained below.
 
 ```{r}
-p1 <- qplot(df$duration, geom="histogram", xlab="Duration")
-p2 <- qplot(df$protocol_type, geom="bar", xlab="Protocol Type")
-p3 <- qplot(df$service, geom="bar", xlab="Service")
-p4 <- qplot(df$src_bytes, geom="histogram", xlab="Bytes from Source to Destination")
-p5 <- qplot(df$dst_bytes, geom="histogram", xlab="Bytes from Destination to Source")
-p6 <- qplot(df$flag, geom="bar", xlab="Error Status")
-p7 <- qplot(df$hot, geom="histogram", xlab="Hot Indicators")
-p8 <- qplot(df$logged_in, geom="bar", xlab="Logged In")
-p9 <- qplot(df$num_compromised, geom="histogram", xlab="Number Compromised")
-p10 <- qplot(df$root_shell, geom="bar", xlab="Root Shell")
-p11 <- qplot(df$num_root, geom="histogram", xlab="Number of Root Commands")
-p12 <- qplot(df$num_file_creations, geom="histogram", xlab="File Creations")
-p13 <- qplot(df$num_shells, geom="histogram", xlab="Number of Shells")
-p14 <- qplot(df$num_access_files, geom="histogram", xlab="Accessed Files")
-p15 <- qplot(df$is_guest_login, geom="bar", xlab="Guest Login")
-p16 <- qplot(df$is_intrusion, geom="bar", xlab="Intrusion")
+p1 <- qplot(df$duration, geom="histogram", xlab="Duration", fill="green")  + theme(legend.position="none") + theme(axis.text.x = element_text(angle = -90))
+p2 <- qplot(df$protocol_type, geom="bar", xlab="Protocol Type", fill="green")  + theme(legend.position="none")
+p3 <- qplot(df$service, geom="bar", xlab="Service", fill="green")  + theme(legend.position="none") + theme(axis.text.x = element_text(angle = -90))
+p4 <- qplot(df$src_bytes, geom="histogram", xlab="Bytes from Source to Destination", fill="green")  + theme(legend.position="none")
+p5 <- qplot(df$dst_bytes, geom="histogram", xlab="Bytes from Destination to Source", fill="green")  + theme(legend.position="none")
+p6 <- qplot(df$flag, geom="bar", xlab="Error Status", fill="green")  + theme(legend.position="none") + theme(axis.text.x = element_text(angle = -90))
+p7 <- qplot(df$hot, geom="histogram", xlab="Hot Indicators", fill="green")  + theme(legend.position="none")
+p8 <- qplot(df$logged_in, geom="bar", xlab="Logged In", fill="green")  + theme(legend.position="none")
+p9 <- qplot(df$num_compromised, geom="histogram", xlab="Number Compromised", fill="green")  + theme(legend.position="none")
+p10 <- qplot(df$root_shell, geom="bar", xlab="Root Shell", fill="green")  + theme(legend.position="none")
+p11 <- qplot(df$num_root, geom="histogram", xlab="Number of Root Commands", fill="green")  + theme(legend.position="none")
+p12 <- qplot(df$num_file_creations, geom="histogram", xlab="File Creations", fill="green")  + theme(legend.position="none")
+p13 <- qplot(df$num_shells, geom="histogram", xlab="Number of Shells", fill="green")  + theme(legend.position="none")
+p14 <- qplot(df$num_access_files, geom="histogram", xlab="Accessed Files", fill="green")  + theme(legend.position="none")
+p15 <- qplot(df$is_guest_login, geom="bar", xlab="Guest Login", fill="green")  + theme(legend.position="none")
+p16 <- qplot(df$is_intrusion, geom="bar", xlab="Intrusion", fill="green")  + theme(legend.position="none")
 grid.arrange(p1, p2, p3, p4, p5, p6, p7, p8, p9, ncol=3)
 grid.arrange(p10, p12, p13, p14, p15, p16, ncol=3)
+```
 
+## Univariate Analysis
+
+The data above shows that most continuous variables are highly skewed, with most values centred close to zero and a few large values that skew the distributions to the right. It is also evident that several variables contain only zeros. Based on the above analysis, we moved on to look at a bivariate analysis between four variables of interest.
+
+## Bivariate Analysis
+```{r}
 #Adding a boxplots src and dst bytes by service
 options(scipen=999)
 ggplot(data = df,aes(x = as.factor(service),y = src_bytes))+
@@ -90,14 +97,7 @@ ggplot(data = df,aes(x = as.factor(service),y = dst_bytes))+
           geom_boxplot()+
           coord_flip()+
           ylab("number of data bytes from destination to source")+xlab("Service")
-```
 
-## Univariate Analysis
-
-The data above shows that most continuous variables are highly skewed, with most values centred close to zero and a few large values that skew the distributions to the right. It is also evident that several variables contain only zeros. Based on the above analysis, we moved on to look at a bivariate analysis between four variables of interest.
-
-## Bivariate Analysis
-```{r}
 ggplot(data = df,aes(x = as.factor(service),y = duration ))+
           geom_boxplot()+
           coord_flip()+xlab("Service Types")
@@ -303,6 +303,7 @@ intrusion.party <- as.party(intrusion.tree)
 
 plot(intrusion.party)
 ```
+
 This is the original result from training the tree before pruning.
 
 ### Growing and Pruning the Tree
@@ -312,7 +313,7 @@ intrusion.full <- rpart(is_intrusion ~ ., data = df.train,
 
 # Run the `plotcp` command on this tree. Also look at the `cptable` attribute of `marketing.full`
 plotcp(intrusion.full)
-mycp <- 0.046
+mycp <- 0.0046
 
 intrusion.pruned<- prune(intrusion.full,cp= mycp)
 
@@ -333,7 +334,6 @@ The root node was service and we see that the variable service and flag had the 
 
 Since Decision trees provided a high degree of recall, we also wanted look at random forests.
 
-### Building a Random forest 
 ```{r}
 intrusion.rf <- randomForest(is_intrusion ~.,data=df.train, importance = TRUE)
 kable(intrusion.rf$confusion)
@@ -430,25 +430,26 @@ glm.probs <- predict(glm.fits,df.log.test, type="response")
 cutoff <- 0.5
 glm.pred <- rep(0, length(glm.probs))
 glm.pred[glm.probs > cutoff] <- 1
-
-kable(table(glm.pred, df.log.test$is_intrusion), col.names = c("Actual No", "Actual Yes"))
 ```
+Here we see the coefficients for the logistic regression model. Nearly all of the p-values are insignificant but this is to be expected in a well-split logistic regression model. According to the coefficients, variables like serviceftp and flagS3 are highly indicative of an intrusion.
 
 # Section 3: 
 ## Evaluating Models
 ### Decision Trees
 ```{r}
 my_pred<- predict(intrusion.pruned, df.test, type="prob")[,1]
-kable(classMetrics(my_pred, df.test$is_intrusion,cutoff = 0.20)[1], col.names = c("Actual No", "Actual Yes"))
-kable(classMetrics(my_pred, df.test$is_intrusion,cutoff = 0.20)[2])
+dt_cm <- classMetrics(my_pred, df.test$is_intrusion,cutoff = 0.20)
+kable(dt_cm[1], col.names = c("Actual No", "Actual Yes"))
+kable(dt_cm[2])
 plotClassMetrics(my_pred, df.test$is_intrusion, 
                  xvar = "accuracy", yvar = "specificity", 
                  flip.x = TRUE)
+
+dec.tree.recall <- dt_cm[2][[1]][7, 'value']
 ```
 
-+ it is evident that our tree model has a sensitivity of 0.66. Sensitivity or recall is when given the observations that had the event (intrusions), the observations that were correctly classified to have the event.
 
-+ We also know that a classifier with high Sensitivity is desirable when False Negatives (e.g., failing to detect an intrusion ) are more costly than False Positives(flagging a case an attemt that turns out to non intrusive)
+The decision tree model did not perform well. It overpredicted No outcomes and had a recall of `r dec.tree.recall`.
 
 ### Random Forests
 ```{r}
@@ -458,14 +459,17 @@ kable(classMetrics(rf.test.prob, df.test$is_intrusion, cutoff = 0.3)[2])
 varImpPlot(intrusion.rf)
 ```
 
-We tried fitting a random forest and based on the importance plot, we know that service, flag, src_bytes, dst_bytes and protocol type are the most important. However, when we ran the model on the test dataset and the performance was not as good as the decision tree.
+We tried fitting a random forest and based on the importance plot, we know that service, flag, src_bytes, dst_bytes and protocol type are the most important. However, when we ran the model on the test dataset, the performance was not good, similar to the decision tree.
 
 ### Logistic Regression
 ```{r}
-kable(classMetrics(glm.pred, df.log.test$is_intrusion, cutoff = 0.20)[1], col.names = c("Actual No", "Actual Yes"))
-kable(classMetrics(glm.pred, df.log.test$is_intrusion, cutoff = 0.20)[2])
-```
+lr.cm <- classMetrics(glm.pred, df.log.test$is_intrusion, cutoff = 0.20)
+kable(lr.cm[1], col.names = c("Actual No", "Actual Yes"))
+kable(lr.cm[2])
 
+log.reg.recall <- lr.cm[2][[1]][7, 'value']
+```
+Here we see the confusion matrix and classification metrics of the logistic regression model. The model performed quite well with very high accuracy and a recall of `r round(log.reg.recall, 2)`.
 
 ## Clustering
 We started by clustering only the intrusions data since we are trying to classify the types of intrusions. We then tried to do a k-means clustering on our data, but it did not work with this dataset since we have both discrete and continuous variables.
@@ -521,4 +525,6 @@ kable(intrusion_df[pam$medoids, ])
 
 
 ## Key Takeaways
+Our logistic regression with 7 variables and decision tree model performed well and can be used to determine the existence of known patterns of intrusions as well as anomalies which may be indicative of new and unknown intrusion patterns. We also used clustering to identify six different types of intrusions whose characteristics are laid out in the clustering section. Recall is the most important metric since our main goal is to detect the actual intrusions. It is more important to detect the false negatives rather than the false positives intrusions. The recall for our logistic regression is `r log.reg.recall` which indicates that our detection system is performing well.
 
+In order to implement this system, we would have to build a system that can read in the 7 selected variables from the network log files, in real-time, which can then be fed into the logistic regression model to predict whether the encounter is an intrusion or not. In order to detect unknown intrusion patterns, we would periodically have to run the clustering algorithm to identify new types of intrusions and then use that new knowledge to retrain our logistic regression model.
