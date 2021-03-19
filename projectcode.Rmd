@@ -21,6 +21,7 @@ library(cluster)
 library(caret)
 library(leaps)
 library(Rtsne)
+library(kableExtra)
 
 df <- read.csv("network_traffic.csv")
 
@@ -37,13 +38,6 @@ df <- select(df, -c(num_outbound_cmds, land, num_failed_logins, wrong_fragment, 
 
 # Clean is_intrusion column
 df$is_intrusion <- ifelse(df$is_intrusion == 1, 1, 0)
-
-# make Yes/No variables more readable
-df <- df %>%
-  mutate(is_intrusion = ifelse(is_intrusion == 0,"No","Yes")) %>%
-  mutate(logged_in = ifelse(logged_in == 0,"No","Yes")) %>%
-  mutate(root_shell = ifelse(root_shell == 0,"No","Yes")) %>%
-  mutate(is_guest_login = ifelse(is_guest_login == 0,"No","Yes"))
 
 # convert to factors
 df$is_intrusion <- as.factor(df$is_intrusion)
@@ -257,27 +251,25 @@ ggplot(data = df,aes(x = is_intrusion))+
 
 ```
 
-##Oversampling (Upsampling) the minority class
+## Oversampling (Upsampling) the minority class
 + It is evident from the above graph that we have a problem of imbalanced classes- Meaning we have far fewer postive classes
 or actual intrusions compared to benign intrusions.
 
-+ Since we cannot collect aditional data in this instance, such a situattion requires us to balance the classes by introducing
++ Since we cannot collect additional data in this instance, such a situattion requires us to balance the classes by introducing
 resampling to the dataset. 
 
 + Since the minority class is underpresented, we decided to oversample the `r is_intrusion=="Yes"` observations
 
 ```{r}
-df<- df%>%select(-c(7:14))%>%select(-c(1,7))
+tree.df <- df%>%select(-c(7:14))%>%select(-c(1,7))
 
 
 # Upsample the data to artifically overcome sample imbalance
-df.more.idx <- sample(which(df$is_intrusion == "Yes"), 900, replace = TRUE)
-
-set.seed(981)
+df.more.idx <- sample(which(tree.df$is_intrusion == 1), 900, replace = TRUE)
 
 
-df.upsample <- rbind(df,
-                        df[df.more.idx, ])
+df.upsample <- rbind(tree.df,
+                        tree.df[df.more.idx, ])
 
 
 ggplot(data = df.upsample,aes(x = is_intrusion))+
@@ -298,8 +290,6 @@ train.indexes <- setdiff(1:nrow(df.upsample), test.indexes)
 
 df.train <- df.upsample[train.indexes,]
 df.test <- df.upsample[test.indexes,]
-
-
 ```
 
 ## Decision Trees
@@ -408,9 +398,8 @@ df.subset_bestmodels <- list()
 for(i in 1:nvmax) {
   df.subset_bestmodels[[i]] <- c(coef(df.subset, i))
 }
-df.subset_bestmodels
 ```
-This shows us which variables are included at each step of the best subset selection. We start with a model consisting of one variable then work up to a full model with all 16 predictos included. We will now track the metrics of these models to pick which one is ideal for regression.
+This shows us which variables are included at each step of the best subset selection. We start with a model consisting of one variable then work up to a full model with all 16 predictors included. We will now track the metrics of these models to pick which one is ideal for regression.
 
 ```{r}
 df.summary<-summary(df.subset)
@@ -459,23 +448,31 @@ plot_AIC<-ggplot(data = data.frame(df.summary$cp),
 
 
 grid.arrange(plot_RSS, plot_R_sq,plot_AIC,plot_BIC, ncol=2,nrow=2)
+best.sub.num <- which.min(df.summary$bic)
+best.sub.cols <- names(df.subset_bestmodels[[best.sub.num]][2:best.sub.num+1])
+best.sub.cols
 ```
-Here we see the RSS, R2, AIC, and BIC of all of the above models. We can see that errors are minimized and R2 is maximized at about 6 variables included with severely diminishing returns after that amount. Therefore, we will select the subset with 6 variables to put into the logistic regression model.
+Here we see the RSS, R2, AIC, and BIC of all of the above models. We can see that errors are minimized and R2 is maximized at `r best.sub.num` variables included with severely diminishing returns after that amount. Therefore, we will select the subset with `r best.sub.num` variables to put into the logistic regression model.
 
 ```{r}
-# fit logistic regression on train set
-glm.fits <- glm(is_intrusion∼., data=df.train ,family="binomial", maxit=100)
-summary(glm.fits)
+# train/test split
+test.indexes <- sample(1:nrow(df.upsample), 
+                       round(0.2 * nrow(df.upsample)))
+
+train.indexes <- setdiff(1:nrow(df.upsample), test.indexes)
+df.log.train <- df[train.indexes,]
+df.log.test <- df[test.indexes,]
+
+glm.fits <- glm(is_intrusion∼service + flag + src_bytes + dst_bytes + logged_in + num_compromised + is_guest_login, data=df.log.train ,family="binomial", maxit=100)
+kable(summary(glm.fits)$coef)
 
 # predict on test set
-glm.probs <- predict(glm.fits,df.test, type="response")
-
+glm.probs <- predict(glm.fits,df.log.test, type="response")
 cutoff <- 0.5
-glm.pred <- 1:length(glm.probs)
-glm.pred[glm.probs > cutoff] <- "Yes"
-glm.pred[glm.probs < cutoff] <- "No"
+glm.pred <- rep(0, length(glm.probs))
+glm.pred[glm.probs > cutoff] <- 1
 
-table(glm.pred, df.test$is_intrusion)
+table(glm.pred, df.log.test$is_intrusion)
 varImp(glm.fits)
 ```
 
@@ -484,7 +481,7 @@ varImp(glm.fits)
 # source: https://towardsdatascience.com/clustering-datasets-having-both-numerical-and-categorical-variables-ed91cdca0677
 
 # Clustering
-intrusion_df <- filter(df, is_intrusion == "Yes")
+intrusion_df <- filter(df, is_intrusion == 1)
 
 # build a df of gower distances
 gower_df <- daisy(intrusion_df, metric="gower", type=list(logration=2))
