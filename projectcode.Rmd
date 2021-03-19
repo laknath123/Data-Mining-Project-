@@ -345,7 +345,6 @@ plot(df.pruned.party, gp = gpar(fontsize = 7))
 ```{r}
 my_pred<- predict(intrusion.pruned, df.test, type="prob")[,1]
 
-
 classMetrics(my_pred, df.test$is_intrusion,cutoff = 0.20)
 
 ```
@@ -476,7 +475,7 @@ glm.pred <- rep(0, length(glm.probs))
 glm.pred[glm.probs > cutoff] <- 1
 
 table(glm.pred, df.log.test$is_intrusion)
-varImp(glm.fits)
+classMetrics(glm.pred, df.log.test$is_intrusion, cutoff = 0.20)
 ```
 
 ## Clustering
