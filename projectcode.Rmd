@@ -4,9 +4,15 @@ author: "Laknath Dias Gunathilake, Alexander Talbott, and Meghna Subramanian"
 date: "March 13, 2021"
 output: html_document
 ---
-This is the group project for Group L in 95-791 Data Mining at Carnegie Mellon University, Heinz College, Spring 2021. The project entails an analysis of the network infrastructure of XYZ Bank in St. Loius, Missouri. The team at the bank recently discovered many instances of network intrusions and labeled them in a data set with other information. This project attempts to build a data mining approach to identifying such network intrusions in the future.
+# Introduction
 
-In this file, you will find the approach we took to cleaning the data, building classification models to detect likely intrusions, and building clustering models to categorize the types of intrusions and identify new intrusions in the future. 
+This is Group L's group project in 95-791 Data Mining at Carnegie Mellon University, Heinz College, Spring 2021. The project entails an analysis of the network infrastructure of XYZ Bank in St. Loius, Missouri.
+ 
+The bank recently discovered many network intrusions and labelled them in a data set with other information. This project attempts to build a data mining approach to identifying such network intrusions in the future.
+As part of the"network_traffic.csv" file, we have several variables that help understand an activity's characteristics, such as different protocols, service types, and data bytes. Our response variable for analysis is the "is_intrusions" variable that tells us whether an attempt/unusual activity led to an intrusion where 1 is an actual intrusion and 0 is a benign session.
+ 
+This project will clean and explore the data, build different models to detect and categorize likely types of intrusions and predict future intrusions.
+ 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message=FALSE)
 
@@ -27,11 +33,13 @@ df <- read.csv("network_traffic.csv")
 
 cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 
-#set.seed(1234)
+set.seed(981)
 ```
 
+# Section 1: Exploratory Data Analysis
+
 ## Data Cleaning
-Unfortunately, the data provided by the bank is not perfect. Here, we drop the columns that will not be useful in our analysis as they contain the same value for every instance and we convert the data to datatypes R can better understand.
+Firstly, the data provided by the bank is not perfect. Below, we drop the columns that will not be useful in our analysis. We dropped variables that contain the same value for every instance since they don't add any variation to our dataset and save computational time.  Secondly, we convert the data to datatypes R can better understand.
 ```{r}
 # drop useless columns
 df <- select(df, -c(num_outbound_cmds, land, num_failed_logins, wrong_fragment, urgent, is_host_login, su_attempted))
@@ -50,8 +58,7 @@ df$is_guest_login <- as.factor(df$is_guest_login)
 ```
 
 ## Data Exploration  
-
-In this section, we explore the various connection types and services to determine if we are able to detect any interesting patterns or anomolies with regards to bytes been transferred and the duration of the connections. 
+This section explores the various connection types and services to determine if we can detect any interesting patterns or anomalies regarding bytes and the connection durations. Initially, we did a univariate variable analysis through bar charts and box plots. We then moved on to do a multivariate analysis to understand relationships between different variables. Findings from our study are explained below.
 
 ```{r }
 p1 <- qplot(df$duration, geom="histogram", xlab="Duration")
@@ -86,38 +93,29 @@ ggplot(data = df,aes(x = as.factor(service),y = dst_bytes))+
 ```
 ## Univariate Analysis
 
-+ Looking at the data above it is evident that a majority of the continous variables are highly skewed with most values centering close to zero and and a few large values that skewing the distributions to the right.
+The data above shows that most continuous variables are highly skewed, with most values centred close to zero and a few large values that skew the distributions to the right. It is also evident that several variables contain only zeros. Based on the above analysis, we moved on to look at a bivariate analysis between four variables of interest.
 
-+ it also evident that there are a number of variables that contain only zero's 
-
-+ accordingly we hope to look at a bivariate analysis between two variables of interest in the next section
-
-
-## Analyzing byte transfers for Different Service Types
-
-We wanted to understand the bytes transferred between the different services `r unique(df$service)`
-
-
-+  It is evident that the http ftp_data,http and smtp data have large variation in the number of bytes sent from source to destination with http data having an extreme outlier
-
-+ When looking at byte transfer from destination to the source it is evident that http, and telnet have large variations.
-It is evident that "Telnet is not a secure protocol and is unencrypted. By monitoring a user's connection, anyone can access a person's username, password and other private information that is typed over the Telnet session in plaintext. With this information, access can be gained to the user's device." Source("https://searchnetworking.techtarget.com/definition/Telnet")
-According this is quite alarming that we large number of bytes being sent from destination to the source using the telnet service type.
-
-# Understanding Duration for different Service Types
-
+## Bivariate Analysis
 ```{r}
 ggplot(data = df,aes(x = as.factor(service),y = duration ))+
           geom_boxplot()+
           coord_flip()+xlab("Service Types")
+ggplot(data = df,aes(x = as.factor(is_intrusion)  ,y = duration))+
+          geom_boxplot()+
+          coord_flip()+xlab("Duration of intrusions")
 ```
+We started by understanding the bytes transferred between the different services `r unique(df$service)`
+ 
+Based on the boxplots above, it is evident that the http ftp_data, http, Telnet, and smtp data have a large variation in the number of bytes sent from source to destination, with http data having an extreme outlier. The 'others' service types have multiple outliers, including an outlier indicating a connection that lasted for more than `r max(df$duration)/(60*60)` or 6 hours.
+ 
+Telnet and service type tagged others have the highest duration or the number of second in the connection. It is evident that Telnet is not a secure protocol and is unencrypted. By monitoring a user's connection, anyone can access a person's username, password and other private information that is typed over the Telnet session in plaintext. With this information, access can be gained to the user's device("https://searchnetworking.techtarget.com/definition/Telnet").
+Based on this information, it is pretty alarming that many bytes are being sent from the destination to the source using the telnet service type.
+ 
+ 
+Based on the boxplot on the duration of intrusion, we can see that non-intrusions have many outliers, making it difficult to draw conclusions. Intrusions, on the other hand, have more variations with a larger interquartile range. The median intrusion also has a longer duration than the median non-intrusions.
 
-+ It is evident telnet and service type tagged others have the highest duration or the number of second in the connection. 
-It is also evident that others seem to have multiple outliers including an outlier that incidates there was a connection that 
-lasted for more than `r max(df$duration)/(60*60)` or 6 hours
 
-
-# Class Metrics Function
+## Class Metrics Function
 ```{r}
 classMetrics <- function(score, y, cutoff, 
                          type = c("all", "accuracy", "sensitivity", 
@@ -172,11 +170,7 @@ classMetrics <- function(score, y, cutoff,
   }
 }
 
-```
 
-
-#Plot Class 
-```{r}
 plotClassMetrics <- function(score, y, xvar = NULL, yvar = c("accuracy", "sensitivity", 
                                   "specificity", "ppv", "npv", "precision", 
                                   "recall"),
@@ -243,22 +237,19 @@ plotClassMetrics <- function(score, y, xvar = NULL, yvar = c("accuracy", "sensit
 }
 ```
 
-
-# Identifying the imbalances in dataset
+## Oversampling (Upsampling) the minority class
 ```{r}
 ggplot(data = df,aes(x = is_intrusion))+
       geom_bar(aes(fill=is_intrusion))+ ggtitle("Class Imbalance")
 
 ```
-
-## Oversampling (Upsampling) the minority class
 + It is evident from the above graph that we have a problem of imbalanced classes- Meaning we have far fewer postive classes
 or actual intrusions compared to benign intrusions.
 
 + Since we cannot collect additional data in this instance, such a situattion requires us to balance the classes by introducing
 resampling to the dataset. 
 
-+ Since the minority class is underpresented, we decided to oversample the `r is_intrusion=="Yes"` observations
++ Since the minority class is underpresented, we decided to oversample the `r is_intrusion==1` observations
 
 ```{r}
 tree.df <- df%>%select(-c(7:14))%>%select(-c(1,7))
@@ -266,8 +257,6 @@ tree.df <- df%>%select(-c(7:14))%>%select(-c(1,7))
 
 # Upsample the data to artifically overcome sample imbalance
 df.more.idx <- sample(which(df$is_intrusion == 1), 900, replace = TRUE)
-
-set.seed(981)
 
 
 df.upsample <- rbind(tree.df,
@@ -278,7 +267,7 @@ ggplot(data = df.upsample,aes(x = is_intrusion))+
       geom_bar(aes(fill=is_intrusion))+ ggtitle("Classes Balanced")
 
 ```
-+ The above bar graph seems to indicate now that we have an approximate balance between intrusions equal to one and zero
++ The above bar graph seems to indicate now that we have more balance between intrusions equal to one and zero
 
 ```{r}
 # Randomly select 20% of the data to be held out for model validation
@@ -294,7 +283,11 @@ df.train <- df.upsample[train.indexes,]
 df.test <- df.upsample[test.indexes,]
 ```
 
+# Section 2: Methodology
 ## Decision Trees
+
+We first fitted a decision tree on the training data set.  We also tried different split values and decided on 10 as the min split. We then used the rpart function to grow the tree. Then we plotted the complexity parameter vs the relative error of the trained model and chose a complexity parameter that minimizes the relative error. We then used the chosen complexity error on the test set. 
+
 ### Training the tree
 ```{r}
 intrusion.tree <- rpart(is_intrusion ~ ., df.train)
@@ -311,7 +304,7 @@ plot(intrusion.party)
 print(intrusion.party)
 
 ```
-
+This is the original result from training the tree before pruning.
 
 ### Growing and Pruning the Tree
 ```{r}
@@ -330,7 +323,7 @@ intrusion.pruned<- prune(intrusion.full,cp= mycp)
 
 print(intrusion.pruned)
 ```
-+ After trying different min split levels for training the dataset I found minsplit level of 10 to result in better performance when training the tree.
+We used this plot to determine the cp-value with the lowest relative error.
 
 
 ### Pruned Tree
@@ -338,26 +331,7 @@ print(intrusion.pruned)
 df.pruned.party <- as.party(intrusion.pruned)
 plot(df.pruned.party, gp = gpar(fontsize = 7))
 ```
-
-+ it is evident that in the pruned tree we split by service and flag to classify observations as intrusions or not.  
-
-### Using the pruned tree on the test dataset
-```{r}
-my_pred<- predict(intrusion.pruned, df.test, type="prob")[,1]
-
-classMetrics(my_pred, df.test$is_intrusion,cutoff = 0.20)
-
-```
-
-## Visualizing Sensitivity and Specificity
-```{r}
-plotClassMetrics(my_pred, df.test$is_intrusion, 
-                 xvar = "accuracy", yvar = "specificity", 
-                 flip.x = TRUE)
-```
-+ it is evident that our tree model has a sensitivity of 0.66. Sensitivity or recall is when given the observations that had the event (intrusions), the observations that were correctly classified to have the event.
-
-+ We also know that a classifier with high Sensitivity is desirable when False Negatives (e.g., failing to detect an intrusion ) are more costly than False Positives(flagging a case an attemt that turns out to non intrusive)
+The root node was service and we see that the variable service and flag had the highest predictive power.
 
 
 ## Building a Random forest 
@@ -369,19 +343,6 @@ Since Decision trees provided a high degree of recall, we also wanted look at ra
 intrusion.rf <- randomForest(is_intrusion ~.,data=df.train)
 intrusion.rf
 ```
-
-+ Based on the importance plot, we know that service, flag, src_bytes, dst_bytes and protocol type are important 
-
-```{r}
-varImpPlot (intrusion.rf)
-```
-
-```{r}
-rf.test.prob <- predict(intrusion.rf, newdata = df.test, type = "prob")[,1]
-
-classMetrics(rf.test.prob, df.test$is_intrusion, cutoff = 0.3)
-```
-
 
 ## Logistic Regression
 In this section, we will attempt to separate intrusions from benign sessions using logistic regression. First we will select the subset of variables that will be best to fit the logisitc regression model.
@@ -475,7 +436,38 @@ glm.pred <- rep(0, length(glm.probs))
 glm.pred[glm.probs > cutoff] <- 1
 
 table(glm.pred, df.log.test$is_intrusion)
+
+```
+
+# Section 3: 
+## Evaluating Models
+### Decision Trees
+```{r}
+my_pred<- predict(intrusion.pruned, df.test, type="prob")[,1]
+classMetrics(my_pred, df.test$is_intrusion,cutoff = 0.20)
+plotClassMetrics(my_pred, df.test$is_intrusion, 
+                 xvar = "accuracy", yvar = "specificity", 
+                 flip.x = TRUE)
+```
++ it is evident that our tree model has a sensitivity of 0.66. Sensitivity or recall is when given the observations that had the event (intrusions), the observations that were correctly classified to have the event.
+
++ We also know that a classifier with high Sensitivity is desirable when False Negatives (e.g., failing to detect an intrusion ) are more costly than False Positives(flagging a case an attemt that turns out to non intrusive)
+
+### Random Forests
+```{r}
+rf.test.prob <- predict(intrusion.rf, newdata = df.test, type = "prob")[,1]
+
+classMetrics(rf.test.prob, df.test$is_intrusion, cutoff = 0.3)
+varImpPlot (intrusion.rf)
+```
++ Based on the importance plot, we know that service, flag, src_bytes, dst_bytes and protocol type are important 
+
+### Logistic Regression
+```{r}
 classMetrics(glm.pred, df.log.test$is_intrusion, cutoff = 0.20)
+plotClassMetrics(glm.pred, df.log.test$is_intrusion, 
+                 xvar = "accuracy", yvar = "specificity", 
+                 flip.x = TRUE)
 ```
 
 ## Clustering
